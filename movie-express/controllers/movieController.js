@@ -1,16 +1,58 @@
+import mongoose from "mongoose";
 import movieModel from "../models/movieModel.js";
 
 export const listMovie = async (req, res) => {
   try {
-    const data = await movieModel.find({});
+    // Hanya menampilkan movie milik user yang sedang login
+    // const movie = (await movieModel.find({})).toSorted({createAt : -1});
+    const movie = await MovieModel.find({
+      createdBy: req.user?.user_id,
+    }).sort({ createdAt: -1 });
 
+    return res.status(200).json({
+      message: "Daftar semua movie",
+      data: movie,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Terjasi kesalahan pada server",
+      error: error.message,
+      data: null,
+    });
+  }
+};
+
+export const getMovieById = async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) {
+      return res.status(400).json({
+        message: "ID Movie wajib diisi",
+        data: null,
+      });
+    }
+
+    // Mencari movie berdasarkan ID dan Kepemilikan user
+    // const movie = await movieModel.findById(id);
+    const movie = await movieModel.findOne({
+      _id: id,
+      createdBy: req.user?.user_id,
+    });
+
+    if (!movie) {
+      return res.status(404).json({
+        message: "Movie tidak ditemukan",
+        data: null,
+      });
+    }
     res.status(200).json({
-      message: "Berhasil mendapatkan list movie",
-      data: data,
+      message: "Berhasil mendapatkan data Movie",
+      data: movie,
     });
   } catch (error) {
     res.status(500).json({
-      message: error.message,
+      message: "Terjadi kesalahan pada server",
+      error: error.message,
       data: null,
     });
   }
@@ -18,7 +60,18 @@ export const listMovie = async (req, res) => {
 
 export const addListMovie = async (req, res) => {
   try {
-    const newMovie = await movieModel.create(req.body);
+    const { judul, tahunRilis, sutradara } = req.body;
+
+    if (!judul || !tahunRilis || !sutradara) {
+      return res.status(400).json({
+        message: "Semua field (judul, tahunRilis, sutradara) wajib diisi",
+        data: null,
+      });
+    }
+
+    // Menyimpan user_id pembuat ke database
+    // const newMovie = await movieModel.create({judul, tahunRilis, sutradara});
+    const newMovie = await movieModel.create({ judul, tahunRilis, sutradara, createdBy: req.user?.user_id });
 
     res.status(201).json({
       message: "Movie berhasil ditambahkan",
@@ -34,19 +87,32 @@ export const addListMovie = async (req, res) => {
 
 export const updateDataMovie = async (req, res) => {
   try {
-    const id = req.params?.id;
-    const request = req.body;
+    const { id } = req.params;
+    const { judul, tahunRilis, sutradara } = req.body;
 
-    if (!id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         message: "ID Movie wajib diisi di parameter URL",
         data: null,
       });
     }
 
-    const response = await movieModel.findByIdAndUpdate(id, request, { new: true });
+    // Update hanya jika ID cocok dan user pembuat cocok
+    //  const updateMovie = await movieModel.findByIdAndUpdate(
+    //  id,
+    //  {judul, tahunRilis, sutradara},
+    //  { new: true },
+    // );
+    const updateMovie = await movieModel.findByIdAndUpdate(
+      {
+        _id: id,
+        createBy: req.user?.user_id,
+      },
+      { judul, tahunRilis, sutradara },
+      { new: true }
+    );
 
-    if (!response) {
+    if (!updateMovie) {
       return res.status(404).json({
         message: "Data movie tidak ditemukan",
         data: null,
@@ -55,7 +121,7 @@ export const updateDataMovie = async (req, res) => {
 
     return res.status(200).json({
       message: "Data movie berhasil diupdate",
-      data: response,
+      data: updateMovie,
     });
   } catch (error) {
     res.status(500).json({
@@ -67,18 +133,23 @@ export const updateDataMovie = async (req, res) => {
 
 export const deleteMovie = async (req, res) => {
   try {
-    const id = req.params.id;
+    const { id } = req.params;
 
-    if (!id) {
+    if (!id || mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         message: "ID Movie wajib diisi di parameter URL",
         data: null,
       });
     }
 
-    const response = await movieModel.findByIdAndDelete(id);
+    // Hanya hapus jika ID cocok dan user pembuat cocok
+    // const deleteMovie = await movieModel.findByIdAndDelete(id);
+    const deleteMovie = await movieModel.findByIdAndDelete({
+      _id: id,
+      createdBy: req.user?.user_id,
+    });
 
-    if (!response) {
+    if (!deleteMovie) {
       return res.status(404).json({
         message: "Movie tidak ditemukan",
         data: null,
@@ -87,11 +158,12 @@ export const deleteMovie = async (req, res) => {
 
     return res.status(200).json({
       message: "Movie berhasil dihapus",
-      data: response,
+      data: deleteMovie,
     });
   } catch (error) {
     res.status(500).json({
-      message: error.message,
+      message: "Terjadi kesalahan pada server",
+      error: error.message,
       data: null,
     });
   }
